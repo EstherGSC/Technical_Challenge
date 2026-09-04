@@ -2,9 +2,9 @@
   "model": "/root/autodl-tmp/models/Qwen2.5-Math-1.5B",
   "dataset": "EleutherAI/hendrycks_math",
   "split": "test",
-  "num_examples": 32,
+  "num_examples": 5000,
   "expected_examples": 5000,
-  "format_reward": 0.03125,
-  "answer_reward": 0.03125,
-  "reward": 0.03125
+  "format_reward": 0.053,
+  "answer_reward": 0.0084,
+  "reward": 0.0084
 }
