@@ -1,0 +1,54 @@
+{
+  "model": "/root/autodl-tmp/models/Qwen2.5-Math-1.5B-SFT-v2",
+  "dataset": "MATH",
+  "split": "test",
+  "expected_examples": 5000,
+  "num_examples": 5000,
+  "format_accuracy": 0.9736,
+  "answer_accuracy": 0.3252,
+  "reward": 0.3252,
+  "by_config": {
+    "algebra": {
+      "num_examples": 1187,
+      "format_accuracy": 0.9949452401010952,
+      "answer_accuracy": 0.45829823083403537,
+      "reward": 0.45829823083403537
+    },
+    "counting_and_probability": {
+      "num_examples": 474,
+      "format_accuracy": 0.989451476793249,
+      "answer_accuracy": 0.27848101265822783,
+      "reward": 0.27848101265822783
+    },
+    "geometry": {
+      "num_examples": 479,
+      "format_accuracy": 0.9373695198329853,
+      "answer_accuracy": 0.23173277661795408,
+      "reward": 0.23173277661795408
+    },
+    "intermediate_algebra": {
+      "num_examples": 903,
+      "format_accuracy": 0.9512735326688815,
+      "answer_accuracy": 0.17386489479512734,
+      "reward": 0.17386489479512734
+    },
+    "number_theory": {
+      "num_examples": 540,
+      "format_accuracy": 0.987037037037037,
+      "answer_accuracy": 0.24074074074074073,
+      "reward": 0.24074074074074073
+    },
+    "prealgebra": {
+      "num_examples": 871,
+      "format_accuracy": 0.9896670493685419,
+      "answer_accuracy": 0.49598163030998854,
+      "reward": 0.49598163030998854
+    },
+    "precalculus": {
+      "num_examples": 546,
+      "format_accuracy": 0.9432234432234432,
+      "answer_accuracy": 0.21978021978021978,
+      "reward": 0.21978021978021978
+    }
+  }
+}

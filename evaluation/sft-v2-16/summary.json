@@ -1,0 +1,54 @@
+{
+  "model": "/root/autodl-tmp/models/Qwen2.5-Math-1.5B-SFT-v2",
+  "dataset": "MATH",
+  "split": "test",
+  "expected_examples": 5000,
+  "num_examples": 16,
+  "format_accuracy": 1.0,
+  "answer_accuracy": 0.375,
+  "reward": 0.375,
+  "by_config": {
+    "algebra": {
+      "num_examples": 16,
+      "format_accuracy": 1.0,
+      "answer_accuracy": 0.375,
+      "reward": 0.375
+    },
+    "counting_and_probability": {
+      "num_examples": 0,
+      "format_accuracy": 0.0,
+      "answer_accuracy": 0.0,
+      "reward": 0.0
+    },
+    "geometry": {
+      "num_examples": 0,
+      "format_accuracy": 0.0,
+      "answer_accuracy": 0.0,
+      "reward": 0.0
+    },
+    "intermediate_algebra": {
+      "num_examples": 0,
+      "format_accuracy": 0.0,
+      "answer_accuracy": 0.0,
+      "reward": 0.0
+    },
+    "number_theory": {
+      "num_examples": 0,
+      "format_accuracy": 0.0,
+      "answer_accuracy": 0.0,
+      "reward": 0.0
+    },
+    "prealgebra": {
+      "num_examples": 0,
+      "format_accuracy": 0.0,
+      "answer_accuracy": 0.0,
+      "reward": 0.0
+    },
+    "precalculus": {
+      "num_examples": 0,
+      "format_accuracy": 0.0,
+      "answer_accuracy": 0.0,
+      "reward": 0.0
+    }
+  }
+}
