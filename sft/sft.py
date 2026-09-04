@@ -7,9 +7,15 @@ import argparse
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from datasets import load_from_disk
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+
+# ============================================================
+# Configuration
+# ============================================================
 
 MODEL_PATH = "/root/autodl-tmp/models/Qwen2.5-Math-1.5B"
 DATA_ROOT = "/root/autodl-tmp/datasets/MATH"
@@ -24,19 +30,30 @@ CONFIGS = [
     "precalculus",
 ]
 
-SYSTEM_PROMPT = """A conversation between User and Assistant. The User asks a question, and the Assistant solves it. The Assistant first thinks about the reasoning process in the mind and then provides the User with the answer. The reasoning process is enclosed within <think> </think> and answer is enclosed within <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>.
+
+# ============================================================
+# Prompt
+# ============================================================
+
+SYSTEM_PROMPT = """A conversation between User and Assistant. The User asks a question and the Assistant solves it. The Assistant first thinks about the reasoning process in the mind and then provides the User with the answer. The reasoning process is enclosed within <think> </think> and answer is enclosed within <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think> <answer> answer here </answer>.
 User: {question}
 Assistant: <think>
 """
 
 
+# ============================================================
+# Utility functions
+# ============================================================
+
 def extract_boxed_answer(solution):
     """
     Extract the final \\boxed{...} from a MATH solution.
-    Supports nested braces such as:
+
+    Supports nested braces, e.g.
         \\boxed{\\frac{1}{2}}
         \\boxed{x^{2}+1}
     """
+
     matches = []
     start = 0
 
@@ -57,7 +74,9 @@ def extract_boxed_answer(solution):
             i += 1
 
         if depth == 0:
-            content = solution[pos + len(r"\boxed{"):i - 1]
+            content = solution[
+                pos + len(r"\boxed{"):i - 1
+            ]
             matches.append(content)
 
         start = i
@@ -68,7 +87,22 @@ def extract_boxed_answer(solution):
     return matches[-1].strip()
 
 
+# ============================================================
+# Sample construction
+# ============================================================
+
 def build_sample(question, solution, tokenizer, max_length):
+    """
+    Construct one SFT sample.
+
+    The prompt and response are tokenized separately so that the
+    response mask can be constructed exactly.
+
+    If the total sequence exceeds max_length, tokens are removed
+    from the beginning of the response while keeping the prompt
+    intact whenever possible. This preserves the final answer.
+    """
+
     answer = extract_boxed_answer(solution)
 
     if answer is None:
@@ -78,10 +112,12 @@ def build_sample(question, solution, tokenizer, max_length):
 
     response = (
         solution.strip()
-        + f"\n</think> <answer>{answer}</answer>"
+        + f"\n</think>\n<answer>{answer}</answer>"
     )
 
-    full_text = prompt + response
+    # --------------------------------------------------------
+    # Tokenize prompt and response separately
+    # --------------------------------------------------------
 
     prompt_ids = tokenizer(
         prompt,
@@ -89,76 +125,91 @@ def build_sample(question, solution, tokenizer, max_length):
         truncation=False,
     )["input_ids"]
 
-    full_ids = tokenizer(
-        full_text,
-        add_special_tokens=True,
+    response_ids = tokenizer(
+        response,
+        add_special_tokens=False,
         truncation=False,
     )["input_ids"]
 
-    # If the sample is too long, truncate from the left so that
-    # the end of the reasoning and answer are retained.
-    if len(full_ids) > max_length:
-        full_ids = full_ids[-max_length:]
+    original_length = len(prompt_ids) + len(response_ids)
 
-        # Since prompt occupies the beginning, response starts
-        # after the prompt. If truncation removes prompt tokens,
-        # all retained tokens are response tokens.
-        prompt_length = max(0, len(prompt_ids) - (len(tokenizer(full_text)["input_ids"]) - max_length))
-        prompt_length = min(prompt_length, max_length)
-    else:
-        prompt_length = min(len(prompt_ids), len(full_ids))
+    # --------------------------------------------------------
+    # Truncation
+    # --------------------------------------------------------
 
-    attention_mask = [1] * len(full_ids)
+    if original_length > max_length:
 
-    # Response mask: prompt = 0, response = 1.
-    response_mask = [0] * prompt_length + [1] * (len(full_ids) - prompt_length)
+        available_response_length = (
+            max_length - len(prompt_ids)
+        )
+
+        if available_response_length > 0:
+            # Keep the end of the response because the final
+            # answer is located there.
+            response_ids = response_ids[
+                -available_response_length:
+            ]
+
+        else:
+            # Extremely long prompt.
+            # Keep the end of the prompt as a fallback.
+            prompt_ids = prompt_ids[-max_length:]
+            response_ids = []
+
+    input_ids = prompt_ids + response_ids
+
+    attention_mask = [1] * len(input_ids)
+
+    response_mask = (
+        [0] * len(prompt_ids)
+        + [1] * len(response_ids)
+    )
 
     return {
-        "input_ids": full_ids,
+        "input_ids": input_ids,
         "attention_mask": attention_mask,
         "response_mask": response_mask,
         "answer": answer,
         "prompt": prompt,
         "response": response,
+        "original_length": original_length,
+        "truncated": original_length > max_length,
     }
 
 
+# ============================================================
+# Dataset
+# ============================================================
+
 class MathSFTDataset(Dataset):
+
     def __init__(self, tokenizer, max_length):
+
         self.samples = []
+
         self.num_missing_answer = 0
         self.num_truncated = 0
+        self.num_empty_response = 0
 
         for config in CONFIGS:
-            path = os.path.join(DATA_ROOT, config, "train")
+
+            path = os.path.join(
+                DATA_ROOT,
+                config,
+                "train",
+            )
+
             ds = load_from_disk(path)
 
-            print(f"Loading {config}: {len(ds)} examples")
+            print(
+                f"Loading {config}: "
+                f"{len(ds)} examples"
+            )
 
             for item in ds:
+
                 question = item["problem"]
                 solution = item["solution"]
-
-                answer = extract_boxed_answer(solution)
-
-                if answer is None:
-                    self.num_missing_answer += 1
-                    continue
-
-                prompt = SYSTEM_PROMPT.format(question=question)
-                response = (
-                    solution.strip()
-                    + f"\n</think> <answer>{answer}</answer>"
-                )
-
-                raw_ids = tokenizer(
-                    prompt + response,
-                    add_special_tokens=True,
-                    truncation=False,
-                )["input_ids"]
-
-                if len(raw_ids) > max_length:
-                    self.num_truncated += 1
 
                 sample = build_sample(
                     question,
@@ -167,15 +218,42 @@ class MathSFTDataset(Dataset):
                     max_length,
                 )
 
-                if sample is not None:
-                    self.samples.append(sample)
+                if sample is None:
+                    self.num_missing_answer += 1
+                    continue
+
+                if sample["truncated"]:
+                    self.num_truncated += 1
+
+                if len(sample["response"]) == 0:
+                    self.num_empty_response += 1
+
+                self.samples.append(sample)
 
         print()
         print("Dataset statistics")
         print("------------------")
-        print("usable samples:", len(self.samples))
-        print("missing boxed answer:", self.num_missing_answer)
-        print("truncated samples:", self.num_truncated)
+        print(
+            "usable samples:",
+            len(self.samples),
+        )
+        print(
+            "missing boxed answer:",
+            self.num_missing_answer,
+        )
+        print(
+            "truncated samples:",
+            self.num_truncated,
+        )
+        print(
+            "empty response samples:",
+            self.num_empty_response,
+        )
+
+        if len(self.samples) == 0:
+            raise RuntimeError(
+                "No usable training samples found."
+            )
 
     def __len__(self):
         return len(self.samples)
@@ -184,36 +262,70 @@ class MathSFTDataset(Dataset):
         return self.samples[idx]
 
 
+# ============================================================
+# Collator
+# ============================================================
+
 def collate_fn(batch, pad_token_id):
-    max_len = max(len(x["input_ids"]) for x in batch)
+
+    max_len = max(
+        len(x["input_ids"])
+        for x in batch
+    )
 
     input_ids = []
     attention_masks = []
     response_masks = []
 
     for x in batch:
-        pad_len = max_len - len(x["input_ids"])
+
+        pad_len = (
+            max_len - len(x["input_ids"])
+        )
 
         input_ids.append(
-            x["input_ids"] + [pad_token_id] * pad_len
+            x["input_ids"]
+            + [pad_token_id] * pad_len
         )
 
         attention_masks.append(
-            x["attention_mask"] + [0] * pad_len
+            x["attention_mask"]
+            + [0] * pad_len
         )
 
         response_masks.append(
-            x["response_mask"] + [0] * pad_len
+            x["response_mask"]
+            + [0] * pad_len
         )
 
     return {
-        "input_ids": torch.tensor(input_ids, dtype=torch.long),
-        "attention_mask": torch.tensor(attention_masks, dtype=torch.long),
-        "response_mask": torch.tensor(response_masks, dtype=torch.float32),
+        "input_ids": torch.tensor(
+            input_ids,
+            dtype=torch.long,
+        ),
+        "attention_mask": torch.tensor(
+            attention_masks,
+            dtype=torch.long,
+        ),
+        "response_mask": torch.tensor(
+            response_masks,
+            dtype=torch.float32,
+        ),
     }
 
 
+# ============================================================
+# Loss
+# ============================================================
+
 def compute_response_loss(model, batch):
+    """
+    Compute causal LM loss only on response tokens.
+
+    Also returns the average entropy of the model's token
+    distribution over response positions.
+    """
+
     input_ids = batch["input_ids"]
     attention_mask = batch["attention_mask"]
     response_mask = batch["response_mask"]
@@ -225,7 +337,10 @@ def compute_response_loss(model, batch):
 
     logits = outputs.logits
 
-    # Next-token prediction.
+    # --------------------------------------------------------
+    # Next-token prediction
+    # --------------------------------------------------------
+
     shift_logits = logits[:, :-1, :].contiguous()
     shift_labels = input_ids[:, 1:].contiguous()
     shift_response_mask = response_mask[:, 1:].contiguous()
@@ -238,22 +353,69 @@ def compute_response_loss(model, batch):
         reduction="none",
     ).view_as(shift_labels)
 
-    # Only response tokens contribute to loss.
-    token_loss = token_loss * shift_response_mask
+    # Only response tokens contribute to the loss.
+    token_loss = (
+        token_loss
+        * shift_response_mask
+    )
 
-    loss = token_loss.sum() / shift_response_mask.sum().clamp_min(1.0)
+    valid_tokens = (
+        shift_response_mask.sum()
+        .clamp_min(1.0)
+    )
 
-    return loss
+    loss = (
+        token_loss.sum()
+        / valid_tokens
+    )
+
+    # --------------------------------------------------------
+    # Response entropy
+    # --------------------------------------------------------
+
+    with torch.no_grad():
+
+        float_logits = shift_logits.float()
+
+        log_probs = F.log_softmax(
+            float_logits,
+            dim=-1,
+        )
+
+        probs = log_probs.exp()
+
+        entropy = -(
+            probs * log_probs
+        ).sum(dim=-1)
+
+        entropy = (
+            entropy * shift_response_mask
+        ).sum() / valid_tokens
+
+    return loss, entropy
 
 
-def evaluate_training_loss(model, loader, device, max_batches=20):
+# ============================================================
+# Evaluation loss
+# ============================================================
+
+def evaluate_training_loss(
+    model,
+    loader,
+    device,
+    max_batches=20,
+):
+
     model.eval()
 
     total_loss = 0.0
+    total_entropy = 0.0
     count = 0
 
     with torch.no_grad():
+
         for batch_idx, batch in enumerate(loader):
+
             if batch_idx >= max_batches:
                 break
 
@@ -262,45 +424,151 @@ def evaluate_training_loss(model, loader, device, max_batches=20):
                 for k, v in batch.items()
             }
 
-            loss = compute_response_loss(model, batch)
+            loss, entropy = compute_response_loss(
+                model,
+                batch,
+            )
 
             total_loss += loss.item()
+            total_entropy += entropy.item()
             count += 1
 
     model.train()
 
     if count == 0:
-        return 0.0
+        return 0.0, 0.0
 
-    return total_loss / count
+    return (
+        total_loss / count,
+        total_entropy / count,
+    )
 
+
+# ============================================================
+# Main
+# ============================================================
 
 def main():
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
         "--output_dir",
-        default="/root/autodl-tmp/models/Qwen2.5-Math-1.5B-SFT",
+        default=(
+            "/root/autodl-tmp/models/"
+            "Qwen2.5-Math-1.5B-SFT"
+        ),
     )
 
-    parser.add_argument("--epochs", type=int, default=2)
-    parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=16)
-    parser.add_argument("--learning_rate", type=float, default=2e-5)
-    parser.add_argument("--weight_decay", type=float, default=0.0)
-    parser.add_argument("--max_length", type=int, default=2048)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=2,
+    )
+
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=1,
+    )
+
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=16,
+    )
+
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=2e-5,
+    )
+
+    parser.add_argument(
+        "--weight_decay",
+        type=float,
+        default=0.0,
+    )
+
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=2048,
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+    )
+
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+    )
+
+    parser.add_argument(
+        "--log_interval",
+        type=int,
+        default=10,
+    )
+
+    parser.add_argument(
+        "--sample_interval",
+        type=int,
+        default=50,
+    )
 
     args = parser.parse_args()
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    # --------------------------------------------------------
+    # Directories
+    # --------------------------------------------------------
+
+    os.makedirs(
+        args.output_dir,
+        exist_ok=True,
+    )
+
+    tensorboard_dir = os.path.join(
+        args.output_dir,
+        "tensorboard",
+    )
+
+    os.makedirs(
+        tensorboard_dir,
+        exist_ok=True,
+    )
+
+    # --------------------------------------------------------
+    # Random seeds
+    # --------------------------------------------------------
 
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    # --------------------------------------------------------
+    # Device
+    # --------------------------------------------------------
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA is not available."
+        )
+
     device = torch.device("cuda")
+
+    print("=" * 80)
+    print("Device")
+    print("=" * 80)
+    print(torch.cuda.get_device_name(0))
+    print()
+
+    # --------------------------------------------------------
+    # Tokenizer
+    # --------------------------------------------------------
 
     print("=" * 80)
     print("Loading tokenizer")
@@ -314,10 +582,22 @@ def main():
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    print("pad_token_id:", tokenizer.pad_token_id)
-    print("eos_token_id:", tokenizer.eos_token_id)
+    print(
+        "pad_token_id:",
+        tokenizer.pad_token_id,
+    )
+
+    print(
+        "eos_token_id:",
+        tokenizer.eos_token_id,
+    )
 
     print()
+
+    # --------------------------------------------------------
+    # Dataset
+    # --------------------------------------------------------
+
     print("=" * 80)
     print("Preparing MATH training dataset")
     print("=" * 80)
@@ -328,8 +608,15 @@ def main():
     )
 
     if args.limit is not None:
-        dataset.samples = dataset.samples[:args.limit]
-        print(f"Limited training dataset to {len(dataset.samples)} samples")
+
+        dataset.samples = (
+            dataset.samples[:args.limit]
+        )
+
+        print(
+            f"Limited training dataset to "
+            f"{len(dataset.samples)} samples"
+        )
 
     loader = DataLoader(
         dataset,
@@ -339,39 +626,71 @@ def main():
             x,
             tokenizer.pad_token_id,
         ),
+        pin_memory=True,
+    )
+
+    print(
+        "Training batches:",
+        len(loader),
     )
 
     print()
+
+    # --------------------------------------------------------
+    # Model
+    # --------------------------------------------------------
+
     print("=" * 80)
     print("Loading Qwen2.5-Math-1.5B")
     print("=" * 80)
 
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
-        dtype=torch.bfloat16,
+        torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
+
+    # Gradient checkpointing reduces activation memory.
+    # This does NOT change full-parameter training.
+    model.gradient_checkpointing_enable()
+
+    # Required when using gradient checkpointing with
+    # decoder-only causal language models.
+    model.config.use_cache = False
 
     model.to(device)
     model.train()
 
-    # Full-parameter SFT:
-    # all parameters remain trainable.
+    # --------------------------------------------------------
+    # Full parameter verification
+    # --------------------------------------------------------
+
     trainable_params = [
-        p for p in model.parameters()
+        p
+        for p in model.parameters()
         if p.requires_grad
     ]
 
     trainable_count = sum(
-        p.numel() for p in trainable_params
+        p.numel()
+        for p in trainable_params
     )
 
     total_count = sum(
-        p.numel() for p in model.parameters()
+        p.numel()
+        for p in model.parameters()
     )
 
-    print("Total parameters:", total_count)
-    print("Trainable parameters:", trainable_count)
+    print(
+        "Total parameters:",
+        total_count,
+    )
+
+    print(
+        "Trainable parameters:",
+        trainable_count,
+    )
+
     print(
         "Trainable ratio:",
         trainable_count / total_count,
@@ -379,8 +698,15 @@ def main():
 
     if trainable_count != total_count:
         raise RuntimeError(
-            "This SFT implementation must be full-parameter fine-tuning."
+            "This SFT implementation must be "
+            "full-parameter fine-tuning."
         )
+
+    print()
+
+    # --------------------------------------------------------
+    # Optimizer
+    # --------------------------------------------------------
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -389,129 +715,400 @@ def main():
         betas=(0.9, 0.95),
     )
 
-    # Simple linear warmup.
-    total_steps = math.ceil(
+    # --------------------------------------------------------
+    # Training steps
+    # --------------------------------------------------------
+
+    total_batches = (
         len(loader) * args.epochs
+    )
+
+    total_steps = math.ceil(
+        total_batches
         / args.gradient_accumulation_steps
     )
 
-    warmup_steps = max(1, int(total_steps * 0.03))
+    warmup_steps = max(
+        1,
+        int(total_steps * 0.03),
+    )
 
-    print("Total optimizer steps:", total_steps)
-    print("Warmup steps:", warmup_steps)
+    print(
+        "Total optimizer steps:",
+        total_steps,
+    )
 
-    global_step = 0
-    optimizer.zero_grad(set_to_none=True)
+    print(
+        "Warmup steps:",
+        warmup_steps,
+    )
 
-    log_path = os.path.join(
+    print()
+
+    # --------------------------------------------------------
+    # TensorBoard
+    # --------------------------------------------------------
+
+    writer = SummaryWriter(
+        log_dir=tensorboard_dir
+    )
+
+    # --------------------------------------------------------
+    # Logs
+    # --------------------------------------------------------
+
+    training_log_path = os.path.join(
         args.output_dir,
         "training_log.jsonl",
     )
 
-    with open(log_path, "w") as log_file:
+    samples_log_path = os.path.join(
+        args.output_dir,
+        "samples.jsonl",
+    )
+
+    # --------------------------------------------------------
+    # Training
+    # --------------------------------------------------------
+
+    global_step = 0
+
+    optimizer.zero_grad(
+        set_to_none=True
+    )
+
+    with open(
+        training_log_path,
+        "w",
+        encoding="utf-8",
+    ) as log_file, open(
+        samples_log_path,
+        "w",
+        encoding="utf-8",
+    ) as sample_log_file:
+
         for epoch in range(args.epochs):
 
             epoch_loss = 0.0
+            epoch_entropy = 0.0
             epoch_batches = 0
+
+            print("=" * 80)
+            print(
+                f"Starting epoch "
+                f"{epoch + 1}/{args.epochs}"
+            )
+            print("=" * 80)
 
             for batch_idx, batch in enumerate(loader):
 
                 batch = {
-                    k: v.to(device)
+                    k: v.to(
+                        device,
+                        non_blocking=True,
+                    )
                     for k, v in batch.items()
                 }
 
-                loss = compute_response_loss(
-                    model,
-                    batch,
+                loss, entropy = (
+                    compute_response_loss(
+                        model,
+                        batch,
+                    )
                 )
 
+                # ------------------------------------------------
+                # Numerical stability check
+                # ------------------------------------------------
+
+                if not torch.isfinite(loss):
+                    raise RuntimeError(
+                        f"Non-finite loss detected: "
+                        f"{loss.item()}"
+                    )
+
+                # ------------------------------------------------
+                # Gradient accumulation
+                # ------------------------------------------------
+
                 loss_for_backward = (
-                    loss / args.gradient_accumulation_steps
+                    loss
+                    / args.gradient_accumulation_steps
                 )
 
                 loss_for_backward.backward()
 
                 epoch_loss += loss.item()
+                epoch_entropy += entropy.item()
                 epoch_batches += 1
 
-                if (
+                # ------------------------------------------------
+                # Optimizer update
+                #
+                # Also update on the final incomplete
+                # accumulation group.
+                # ------------------------------------------------
+
+                should_step = (
                     (batch_idx + 1)
-                    % args.gradient_accumulation_steps == 0
-                    or (batch_idx + 1) == len(loader)
-                ):
+                    % args.gradient_accumulation_steps
+                    == 0
+                    or
+                    (batch_idx + 1)
+                    == len(loader)
+                )
+
+                if should_step:
+
                     global_step += 1
 
-                    # Linear warmup.
+                    # ------------------------------------------------
+                    # Linear warmup
+                    # ------------------------------------------------
+
                     if global_step <= warmup_steps:
-                        lr_scale = global_step / warmup_steps
+                        lr_scale = (
+                            global_step
+                            / warmup_steps
+                        )
                     else:
                         lr_scale = 1.0
 
-                    for group in optimizer.param_groups:
-                        group["lr"] = (
-                            args.learning_rate * lr_scale
-                        )
-
-                    torch.nn.utils.clip_grad_norm_(
-                        model.parameters(),
-                        1.0,
+                    current_lr = (
+                        args.learning_rate
+                        * lr_scale
                     )
 
+                    for group in optimizer.param_groups:
+                        group["lr"] = current_lr
+
+                    # ------------------------------------------------
+                    # Gradient clipping
+                    # ------------------------------------------------
+
+                    grad_norm = (
+                        torch.nn.utils
+                        .clip_grad_norm_(
+                            model.parameters(),
+                            1.0,
+                        )
+                    )
+
+                    # ------------------------------------------------
+                    # Optimizer
+                    # ------------------------------------------------
+
                     optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
+
+                    optimizer.zero_grad(
+                        set_to_none=True
+                    )
+
+                    # ------------------------------------------------
+                    # TensorBoard
+                    # ------------------------------------------------
+
+                    writer.add_scalar(
+                        "train/loss",
+                        loss.item(),
+                        global_step,
+                    )
+
+                    writer.add_scalar(
+                        "train/response_entropy",
+                        entropy.item(),
+                        global_step,
+                    )
+
+                    writer.add_scalar(
+                        "train/learning_rate",
+                        current_lr,
+                        global_step,
+                    )
+
+                    writer.add_scalar(
+                        "train/grad_norm",
+                        grad_norm.item(),
+                        global_step,
+                    )
+
+                    # ------------------------------------------------
+                    # JSONL training log
+                    # ------------------------------------------------
 
                     record = {
                         "epoch": epoch + 1,
                         "batch": batch_idx + 1,
                         "global_step": global_step,
                         "loss": loss.item(),
-                        "learning_rate": optimizer.param_groups[0]["lr"],
+                        "response_entropy": entropy.item(),
+                        "learning_rate": current_lr,
+                        "grad_norm": grad_norm.item(),
                     }
 
                     log_file.write(
-                        json.dumps(record) + "\n"
+                        json.dumps(
+                            record,
+                            ensure_ascii=False,
+                        )
+                        + "\n"
                     )
+
                     log_file.flush()
 
-                    if global_step % 10 == 0:
+                    # ------------------------------------------------
+                    # Console output
+                    # ------------------------------------------------
+
+                    if (
+                        global_step
+                        % args.log_interval
+                        == 0
+                    ):
                         print(
                             f"epoch={epoch + 1} "
-                            f"batch={batch_idx + 1}/{len(loader)} "
+                            f"batch={batch_idx + 1}/"
+                            f"{len(loader)} "
                             f"step={global_step} "
                             f"loss={loss.item():.6f} "
-                            f"lr={optimizer.param_groups[0]['lr']:.3e}"
+                            f"entropy={entropy.item():.6f} "
+                            f"lr={current_lr:.3e} "
+                            f"grad_norm={grad_norm.item():.4f}"
                         )
 
+                    # ------------------------------------------------
+                    # Record training sample
+                    # ------------------------------------------------
+
+                    if (
+                        global_step
+                        % args.sample_interval
+                        == 0
+                    ):
+
+                        sample_idx = random.randrange(
+                            len(dataset)
+                        )
+
+                        sample = dataset[
+                            sample_idx
+                        ]
+
+                        sample_record = {
+                            "epoch": epoch + 1,
+                            "global_step": global_step,
+                            "prompt": sample["prompt"],
+                            "response": sample["response"],
+                            "answer": sample["answer"],
+                            "truncated": sample["truncated"],
+                            "original_length": sample[
+                                "original_length"
+                            ],
+                        }
+
+                        sample_log_file.write(
+                            json.dumps(
+                                sample_record,
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
+
+                        sample_log_file.flush()
+
+                        writer.add_text(
+                            "samples/prompt",
+                            sample["prompt"],
+                            global_step,
+                        )
+
+                        writer.add_text(
+                            "samples/response",
+                            sample["response"],
+                            global_step,
+                        )
+
+                        writer.add_text(
+                            "samples/answer",
+                            sample["answer"],
+                            global_step,
+                        )
+
+            # --------------------------------------------------------
+            # Epoch statistics
+            # --------------------------------------------------------
+
             avg_epoch_loss = (
-                epoch_loss / max(epoch_batches, 1)
+                epoch_loss
+                / max(epoch_batches, 1)
+            )
+
+            avg_epoch_entropy = (
+                epoch_entropy
+                / max(epoch_batches, 1)
+            )
+
+            writer.add_scalar(
+                "epoch/loss",
+                avg_epoch_loss,
+                epoch + 1,
+            )
+
+            writer.add_scalar(
+                "epoch/response_entropy",
+                avg_epoch_entropy,
+                epoch + 1,
             )
 
             print()
             print(
-                f"Epoch {epoch + 1} finished. "
-                f"Average loss: {avg_epoch_loss:.6f}"
+                f"Epoch {epoch + 1} finished."
             )
 
-            # Save checkpoint after each epoch.
+            print(
+                f"Average loss: "
+                f"{avg_epoch_loss:.6f}"
+            )
+
+            print(
+                f"Average response entropy: "
+                f"{avg_epoch_entropy:.6f}"
+            )
+
+            # --------------------------------------------------------
+            # Save epoch checkpoint
+            # --------------------------------------------------------
+
             epoch_dir = os.path.join(
                 args.output_dir,
                 f"epoch-{epoch + 1}",
             )
 
-            os.makedirs(epoch_dir, exist_ok=True)
+            os.makedirs(
+                epoch_dir,
+                exist_ok=True,
+            )
 
             model.save_pretrained(
                 epoch_dir,
                 safe_serialization=True,
             )
 
-            tokenizer.save_pretrained(epoch_dir)
+            tokenizer.save_pretrained(
+                epoch_dir
+            )
 
-            print("Saved:", epoch_dir)
+            print(
+                "Saved:",
+                epoch_dir,
+            )
+
             print()
 
-    # Save final model.
+    # --------------------------------------------------------
+    # Save final model
+    # --------------------------------------------------------
+
     print("=" * 80)
     print("Saving final SFT model")
     print("=" * 80)
@@ -521,10 +1118,31 @@ def main():
         safe_serialization=True,
     )
 
-    tokenizer.save_pretrained(args.output_dir)
+    tokenizer.save_pretrained(
+        args.output_dir
+    )
 
-    print("Saved:", args.output_dir)
-    print("Training log:", log_path)
+    writer.close()
+
+    print(
+        "Saved:",
+        args.output_dir,
+    )
+
+    print(
+        "Training log:",
+        training_log_path,
+    )
+
+    print(
+        "Samples log:",
+        samples_log_path,
+    )
+
+    print(
+        "TensorBoard:",
+        tensorboard_dir,
+    )
 
 
 if __name__ == "__main__":
