@@ -1,0 +1,38 @@
+{
+  "model": "/root/autodl-tmp/models/Qwen2.5-Math-1.5B-SFT-v2",
+  "data_root": "/root/autodl-tmp/datasets/MATH",
+  "total_questions": 16,
+  "pending_questions": 16,
+  "G": 8,
+  "temperature": 1.0,
+  "top_p": 1.0,
+  "max_tokens": 1024,
+  "min_tokens": 1,
+  "batch_size": 4,
+  "seed": 42,
+  "total_generated": 128,
+  "format_correct": 126,
+  "answer_correct": 53,
+  "reward_positive": 53,
+  "questions_with_positive": 11,
+  "questions_without_positive": 5,
+  "accepted_samples": 11,
+  "accepted_by_config": {
+    "algebra": 11,
+    "counting_and_probability": 0,
+    "geometry": 0,
+    "intermediate_algebra": 0,
+    "number_theory": 0,
+    "prealgebra": 0,
+    "precalculus": 0
+  },
+  "questions_with_positive_by_config": {
+    "algebra": 11,
+    "counting_and_probability": 0,
+    "geometry": 0,
+    "intermediate_algebra": 0,
+    "number_theory": 0,
+    "prealgebra": 0,
+    "precalculus": 0
+  }
+}
