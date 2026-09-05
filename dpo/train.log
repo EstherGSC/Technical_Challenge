@@ -1,0 +1,110 @@
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+================================================================================
+DPO TRAINING
+================================================================================
+Policy model              : /root/autodl-tmp/models/Qwen2.5-Math-1.5B-RSFT
+Reference model           : /root/autodl-tmp/models/Qwen2.5-Math-1.5B-RSFT
+Dataset                   : /root/Qwen/dpo/sampling-v1/dpo_dataset.jsonl
+Output dir                : /root/autodl-tmp/models/Qwen2.5-Math-1.5B-DPO
+TensorBoard dir           : /root/Qwen/dpo/tensorboard
+Epochs                    : 1
+Batch size                : 1
+Gradient accumulation     : 8
+Learning rate             : 2e-06
+Beta                      : 0.1
+Weight decay              : 0.0
+Max length                : 2048
+Seed                      : 42
+================================================================================
+[1/7] Loading official prompt...
+Official prompt loaded successfully.
+[2/7] Loading DPO dataset...
+DPO pairs loaded: 4594
+DPO pairs by config:
+  algebra                          1253
+  counting_and_probability          447
+  geometry                          445
+  intermediate_algebra              677
+  number_theory                     574
+  prealgebra                        827
+  precalculus                       371
+[3/7] Loading tokenizer...
+Tokenizer vocab size: 151665
+Pad token id: 151643
+[4/7] Loading policy model...
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:  78%|███████▊  | 262/338 [00:00<00:00, 2618.31it/s]Loading weights: 100%|██████████| 338/338 [00:00<00:00, 2431.39it/s]
+Total parameters     : 1,543,714,304
+Trainable parameters  : 1,543,714,304
+Trainable ratio       : 1.000000
+[5/7] Loading reference model...
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:  62%|██████▏   | 208/338 [00:00<00:00, 2078.47it/s]Loading weights: 100%|██████████| 338/338 [00:00<00:00, 2085.46it/s]
+[W905 18:54:08.152484706 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 880803840 bytes (free: 138149888, total: 25252724736).
+[W905 18:55:38.671994587 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 889192448 bytes (free: 800849920, total: 25252724736).
+[W905 18:55:43.290130149 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 954204160 bytes (free: 555483136, total: 25252724736).
+[W905 18:57:20.769328265 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 1151336448 bytes (free: 222035968, total: 25252724736).
+[W905 18:57:20.186671713 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 1151336448 bytes (free: 874250240, total: 25252724736).
+[W905 18:57:20.223100593 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 1151336448 bytes (free: 876347392, total: 25252724736).
+Reference parameters : 1,543,714,304
+Reference model frozen: True
+[6/7] Creating optimizer...
+================================================================================
+TRAINING CONFIGURATION
+================================================================================
+Training samples              : 4594
+Batches per epoch             : 4594
+Optimizer steps per epoch     : 575
+Total optimizer steps         : 575
+================================================================================
+[Epoch 1/1] batch 1/4594 (0.0%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 2/4594 (0.0%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 3/4594 (0.1%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 4/4594 (0.1%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 5/4594 (0.1%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 6/4594 (0.1%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 7/4594 (0.2%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 8/4594 (0.2%) | loss 0.693147 | margin 0.000000 | pref_acc 0.0000
+[Epoch 1/1] batch 81/4594 (1.8%) | loss 0.695575 | margin -0.048504 | pref_acc 0.0000
+[Epoch 1/1] batch 82/4594 (1.8%) | loss 0.704307 | margin -0.221962 | pref_acc 0.0000
+[Epoch 1/1] batch 83/4594 (1.8%) | loss 0.670507 | margin 0.458050 | pref_acc 1.0000
+[Epoch 1/1] batch 84/4594 (1.8%) | loss 0.759588 | margin -1.287415 | pref_acc 0.0000
+[Epoch 1/1] batch 85/4594 (1.9%) | loss 0.706544 | margin -0.266167 | pref_acc 0.0000
+[Epoch 1/1] batch 86/4594 (1.9%) | loss 0.690435 | margin 0.054325 | pref_acc 1.0000
+[Epoch 1/1] batch 87/4594 (1.9%) | loss 0.687862 | margin 0.105980 | pref_acc 1.0000
+[Epoch 1/1] batch 88/4594 (1.9%) | loss 0.702232 | margin -0.180875 | pref_acc 0.0000
+[Epoch 1/1] batch 161/4594 (3.5%) | loss 0.655117 | margin 0.775631 | pref_acc 1.0000
+[Epoch 1/1] batch 162/4594 (3.5%) | loss 0.688679 | margin 0.089565 | pref_acc 1.0000
+[Epoch 1/1] batch 163/4594 (3.5%) | loss 0.680099 | margin 0.262680 | pref_acc 1.0000
+[Epoch 1/1] batch 164/4594 (3.6%) | loss 0.718221 | margin -0.495346 | pref_acc 0.0000
+[Epoch 1/1] batch 165/4594 (3.6%) | loss 0.735963 | margin -0.838730 | pref_acc 0.0000
+[Epoch 1/1] batch 166/4594 (3.6%) | loss 0.704884 | margin -0.233368 | pref_acc 0.0000
+[Epoch 1/1] batch 167/4594 (3.6%) | loss 0.689754 | margin 0.067987 | pref_acc 1.0000
+[Epoch 1/1] batch 168/4594 (3.7%) | loss 0.667297 | margin 0.523865 | pref_acc 1.0000
+[Epoch 1/1] batch 241/4594 (5.2%) | loss 0.684655 | margin 0.170565 | pref_acc 1.0000
+[Epoch 1/1] batch 242/4594 (5.3%) | loss 0.720589 | margin -0.541496 | pref_acc 0.0000
+[Epoch 1/1] batch 243/4594 (5.3%) | loss 0.695426 | margin -0.045532 | pref_acc 0.0000
+[Epoch 1/1] batch 244/4594 (5.3%) | loss 0.709918 | margin -0.332642 | pref_acc 0.0000
+[Epoch 1/1] batch 245/4594 (5.3%) | loss 0.683351 | margin 0.196902 | pref_acc 1.0000
+[Epoch 1/1] batch 246/4594 (5.4%) | loss 0.647660 | margin 0.931419 | pref_acc 1.0000
+[Epoch 1/1] batch 247/4594 (5.4%) | loss 0.638792 | margin 1.118347 | pref_acc 1.0000
+[Epoch 1/1] batch 248/4594 (5.4%) | loss 0.684890 | margin 0.165836 | pref_acc 1.0000
+[Epoch 1/1] batch 321/4594 (7.0%) | loss 0.671439 | margin 0.438980 | pref_acc 1.0000
+[Epoch 1/1] batch 322/4594 (7.0%) | loss 0.713855 | margin -0.409962 | pref_acc 0.0000
+[Epoch 1/1] batch 323/4594 (7.0%) | loss 0.684488 | margin 0.173943 | pref_acc 1.0000
+[Epoch 1/1] batch 324/4594 (7.1%) | loss 0.694903 | margin -0.035095 | pref_acc 0.0000
+[Epoch 1/1] batch 325/4594 (7.1%) | loss 0.709389 | margin -0.322243 | pref_acc 0.0000
+[Epoch 1/1] batch 326/4594 (7.1%) | loss 0.682973 | margin 0.204529 | pref_acc 1.0000
+[Epoch 1/1] batch 327/4594 (7.1%) | loss 0.684781 | margin 0.168034 | pref_acc 1.0000
+[Epoch 1/1] batch 328/4594 (7.1%) | loss 0.705979 | margin -0.255013 | pref_acc 0.0000
+[Epoch 1/1] batch 401/4594 (8.7%) | loss 0.699654 | margin -0.129715 | pref_acc 0.0000
+Traceback (most recent call last):
+  File "/root/Qwen/dpo/train.py", line 1709, in <module>
+    main()
+  File "/root/Qwen/dpo/train.py", line 1309, in main
+    scaled_loss.backward()
+  File "/root/miniconda3/envs/tc/lib/python3.10/site-packages/torch/_tensor.py", line 623, in backward
+    torch.autograd.backward(
+  File "/root/miniconda3/envs/tc/lib/python3.10/site-packages/torch/autograd/__init__.py", line 395, in backward
+    _engine_run_backward(
+  File "/root/miniconda3/envs/tc/lib/python3.10/site-packages/torch/autograd/graph.py", line 979, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.07 GiB. GPU 0 has a total capacity of 23.52 GiB of which 835.75 MiB is free. Including non-PyTorch memory, this process has 22.69 GiB memory in use. Of the allocated memory 19.61 GiB is allocated by PyTorch, and 2.66 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

@@ -1,0 +1,59 @@
+{
+  "total_questions": 16,
+  "pending_questions": 16,
+  "G": 8,
+  "total_generated_responses": 128,
+  "format_correct_responses": 128,
+  "answer_correct_responses": 66,
+  "reward_positive_responses": 66,
+  "questions_with_positive": 12,
+  "questions_without_positive": 4,
+  "questions_with_pair": 9,
+  "questions_without_rejected": 0,
+  "pairs_with_format_correct_rejected": 9,
+  "pairs_with_format_wrong_rejected": 0,
+  "accepted_pairs": 9,
+  "by_config": {
+    "algebra": {
+      "questions": 16,
+      "positive_questions": 12,
+      "pairs": 9
+    },
+    "counting_and_probability": {
+      "questions": 0,
+      "positive_questions": 0,
+      "pairs": 0
+    },
+    "geometry": {
+      "questions": 0,
+      "positive_questions": 0,
+      "pairs": 0
+    },
+    "intermediate_algebra": {
+      "questions": 0,
+      "positive_questions": 0,
+      "pairs": 0
+    },
+    "number_theory": {
+      "questions": 0,
+      "positive_questions": 0,
+      "pairs": 0
+    },
+    "prealgebra": {
+      "questions": 0,
+      "positive_questions": 0,
+      "pairs": 0
+    },
+    "precalculus": {
+      "questions": 0,
+      "positive_questions": 0,
+      "pairs": 0
+    }
+  },
+  "format_accuracy": 1.0,
+  "answer_accuracy": 0.515625,
+  "reward_positive_rate": 0.515625,
+  "positive_coverage": 0.75,
+  "pair_coverage": 0.5625,
+  "new_pairs": 9
+}
