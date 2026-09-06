@@ -1,0 +1,40 @@
+================================================================================
+GRPO TRAINING
+================================================================================
+initial_model              = /root/autodl-tmp/models/Qwen2.5-Math-1.5B-DPO
+output_dir                 = /root/autodl-tmp/models/Qwen2.5-Math-1.5B-GRPO-test
+rollout_batch_size        = 16
+group_size                = 8
+n_grpo_steps              = 1
+epochs_per_rollout_batch  = 2
+train_batch_size          = 8
+gradient_accumulation     = 4
+learning_rate             = 1e-05
+clip_eps                  = 0.2
+sampling_temperature      = 1.0
+sampling_max_tokens       = 1024
+max_train_length          = 1536
+================================================================================
+[DATA] loading MATH train ...
+[WARN] primary MATH loader failed: Directory /root/autodl-tmp/datasets/MATH/algebra is neither a `Dataset` directory nor a `DatasetDict` directory.
+Traceback (most recent call last):
+  File "/root/Qwen/grpo/train.py", line 928, in main
+    all_samples = load_math_train()
+  File "/root/Qwen/grpo/train.py", line 129, in load_math_train
+    ds = load_from_disk(path)
+  File "/root/miniconda3/envs/tc/lib/python3.10/site-packages/datasets/load.py", line 1778, in load_from_disk
+    raise FileNotFoundError(
+FileNotFoundError: Directory /root/autodl-tmp/datasets/MATH/algebra is neither a `Dataset` directory nor a `DatasetDict` directory.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/Qwen/grpo/train.py", line 1945, in <module>
+    main()
+  File "/root/Qwen/grpo/train.py", line 934, in main
+    all_samples = load_math_train_fallback()
+  File "/root/Qwen/grpo/train.py", line 178, in load_math_train_fallback
+    ds = load_from_disk(path)
+  File "/root/miniconda3/envs/tc/lib/python3.10/site-packages/datasets/load.py", line 1778, in load_from_disk
+    raise FileNotFoundError(
+FileNotFoundError: Directory /root/autodl-tmp/datasets/MATH/algebra is neither a `Dataset` directory nor a `DatasetDict` directory.
