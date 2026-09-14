@@ -93,7 +93,7 @@ def get_field(sample, names, default=None):
 
     return default
 
-
+#加载数据集并且清洗格式
 def load_math_train(data_root, configs):
     """
     Load all MATH train configurations.
@@ -110,24 +110,8 @@ def load_math_train(data_root, configs):
     print("=" * 80)
 
     for config in configs:
-        candidates = [
-            Path(data_root) / config / "train",
-            Path(data_root) / config,
-        ]
 
-        dataset_path = None
-
-        for path in candidates:
-            if path.exists():
-                dataset_path = path
-                break
-
-        if dataset_path is None:
-            raise FileNotFoundError(
-                f"Cannot find dataset for config '{config}'. "
-                f"Tried:\n"
-                + "\n".join(str(x) for x in candidates)
-            )
+        dataset_path = Path(data_root) / config / "train"
 
         print(f"[{config}] loading from {dataset_path}")
 
@@ -209,7 +193,7 @@ def load_math_train(data_root, configs):
 
     return all_samples
 
-
+#跳过已经采样过的样本
 def load_existing_ids(output_path):
     """
     Read previously accepted RSFT samples.

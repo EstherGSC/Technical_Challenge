@@ -39,7 +39,7 @@ CONFIGS = [
 # ============================================================
 # Utility functions
 # ============================================================
-
+#在solution中提取最终答案（注意支持嵌套括号）
 def extract_boxed_answer(solution):
     """
     Extract the final \\boxed{...} from a MATH solution.
@@ -116,22 +116,8 @@ def build_sample(question, solution, tokenizer, max_length):
     if answer is None:
         return None
 
-    # --------------------------------------------------------
-    # Official prompt
-    # --------------------------------------------------------
-
     prompt = build_prompt(question)
 
-    # --------------------------------------------------------
-    # SFT response
-    #
-    # IMPORTANT:
-    # The official grader expects the exact substring
-    #
-    #     </think> <answer>
-    #
-    # Therefore there is a SPACE between </think> and <answer>.
-    # --------------------------------------------------------
 
     response = (
         solution.strip()
@@ -150,7 +136,7 @@ def build_sample(question, solution, tokenizer, max_length):
 
     response_ids = tokenizer(
         response,
-        add_special_tokens=False,
+        add_special_tokens=False,#避免出现BOS破坏整体序列编码
         truncation=False,
     )["input_ids"]
 
@@ -161,7 +147,7 @@ def build_sample(question, solution, tokenizer, max_length):
     # --------------------------------------------------------
     # Truncation
     # --------------------------------------------------------
-
+    #截断response头部，保留prompt和answer部分
     truncated = False
 
     if original_length > max_length:
@@ -299,7 +285,7 @@ class MathSFTDataset(Dataset):
 # ============================================================
 # Collator
 # ============================================================
-
+#右padding，保持batch内最大长度一致
 def collate_fn(batch, pad_token_id):
 
     max_len = max(
@@ -374,12 +360,12 @@ def compute_response_loss(model, batch):
     # --------------------------------------------------------
     # Next-token prediction
     # --------------------------------------------------------
-
+    #预测标签（每个位置下个token的概率分布）
     shift_logits = (
         logits[:, :-1, :]
         .contiguous()
     )
-
+    #真实标签
     shift_labels = (
         input_ids[:, 1:]
         .contiguous()
@@ -421,12 +407,12 @@ def compute_response_loss(model, batch):
     with torch.no_grad():
 
         float_logits = shift_logits.float()
-
+        #取对数概率
         log_probs = F.log_softmax(
             float_logits,
             dim=-1,
         )
-
+        #获得真实概率分布
         probs = log_probs.exp()
 
         entropy = -(
@@ -727,21 +713,6 @@ def main():
         for p in model.parameters()
     )
 
-    print(
-        "Total parameters:",
-        total_count,
-    )
-
-    print(
-        "Trainable parameters:",
-        trainable_count,
-    )
-
-    print(
-        "Trainable ratio:",
-        trainable_count / total_count,
-    )
-
     if trainable_count != total_count:
         raise RuntimeError(
             "This SFT implementation must be "
@@ -757,7 +728,7 @@ def main():
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.learning_rate,
-        weight_decay=args.weight_decay,
+        weight_decay=args.weight_decay,#权重衰减，防止过拟合
         betas=(0.9, 0.95),
     )
 
@@ -869,7 +840,7 @@ def main():
 
                 if not torch.isfinite(loss):
                     raise RuntimeError(
-                        f"Non-finite loss detected: "
+                        f"Non-finite loss detected: "#
                         f"{loss.item()}"
                     )
 

@@ -277,60 +277,6 @@ def save_checkpoint(
     return ckpt_dir
 
 
-def evaluate_training_loss(
-    model,
-    dataloader,
-    device,
-    max_batches=None,
-):
-    model.eval()
-
-    total_loss = 0.0
-    total_entropy = 0.0
-    total_batches = 0
-
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(dataloader):
-            if max_batches is not None and batch_idx >= max_batches:
-                break
-
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["labels"].to(device)
-
-            with torch.autocast(
-                device_type="cuda",
-                dtype=torch.bfloat16,
-            ):
-                outputs = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    use_cache=False,
-                )
-
-            loss = compute_response_loss(
-                outputs.logits,
-                labels,
-            )
-            entropy = compute_response_entropy(
-                outputs.logits,
-                labels,
-            )
-
-            total_loss += loss.item()
-            total_entropy += entropy.item()
-            total_batches += 1
-
-    model.train()
-
-    if total_batches == 0:
-        return 0.0, 0.0
-
-    return (
-        total_loss / total_batches,
-        total_entropy / total_batches,
-    )
-
 
 def main():
     parser = argparse.ArgumentParser()

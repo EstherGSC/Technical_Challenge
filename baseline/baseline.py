@@ -30,7 +30,7 @@ CONFIGS = [
 
 BATCH_SIZE = 32
 
-
+# 按照特定的格式加载所有测试数据，返回samples列表
 def load_all_test_data():
     samples = []
 
@@ -51,7 +51,7 @@ def load_all_test_data():
 
     return samples
 
-
+# 加载已经完成的预测结果，返回completed字典
 def load_existing_results():
     completed = {}
 
@@ -70,7 +70,7 @@ def load_existing_results():
 
     return completed
 
-
+# 保存预测结果到文件
 def save_result(result):
     with RESULT_FILE.open("a", encoding="utf-8") as f:
         f.write(
@@ -83,6 +83,7 @@ def save_result(result):
 
 
 def main():
+    #增加了限制参数，只评估前N个例子
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--limit",
@@ -153,18 +154,18 @@ def main():
 
     for start in range(0, total, BATCH_SIZE):
         batch = remaining[start:start + BATCH_SIZE]
-
+        #每个问题的prompt构建
         prompts = [
             build_prompt(sample["question"])
             for sample in batch
         ]
-
+        #打印当前处理的样本数量
         print(
             f"\nGenerating "
             f"{start + 1}-{min(start + BATCH_SIZE, total)} "
             f"/ {total}"
         )
-
+        #批量生成答案
         outputs = llm.generate(
             prompts,
             sampling_params,

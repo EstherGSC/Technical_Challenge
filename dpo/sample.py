@@ -249,42 +249,11 @@ def grade_response(response: str, ground_truth: str):
 # ---------------------------------------------------------------------------
 # Preference selection
 # ---------------------------------------------------------------------------
-
+#优先选择格式正确但是答案错误的样本
 def choose_preference_pair(
     candidates,
     prefer_format_correct_rejected=True,
 ):
-    """
-    candidates:
-        [
-            {
-                "response": str,
-                "format_reward": float,
-                "answer_reward": float,
-                "reward": float,
-                "candidate_index": int,
-            },
-            ...
-        ]
-
-    Selection policy:
-
-    chosen:
-        any reward-positive response.
-
-    rejected:
-        preferably format-correct but answer-wrong:
-            format_reward == 1
-            answer_reward == 0
-            reward == 0
-
-        If unavailable, fall back to any reward=0 response.
-
-    Returns:
-        chosen, rejected
-        or
-        None, None
-    """
 
     positives = [
         x for x in candidates

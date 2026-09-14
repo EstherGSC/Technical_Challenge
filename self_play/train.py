@@ -87,7 +87,6 @@ CONFIGS = [
 # 2. SELF-PLAY PARAMETERS
 # ============================================================
 
-# 第一轮建议 5 steps。
 N_STEPS = 20
 
 # 每轮从 MATH seed 中取多少道题。
@@ -248,7 +247,7 @@ def write_jsonl(path, rows):
                 + "\n"
             )
 
-
+#清洗文本，去除特殊字符和换行符
 def clean_text(text):
 
     text = text or ""
@@ -266,7 +265,7 @@ def clean_text(text):
 
     return text.strip()
 
-
+#清洗文本，去除多余空格
 def normalize_ws(text):
 
     return re.sub(
@@ -275,7 +274,7 @@ def normalize_ws(text):
         clean_text(text)
     ).strip().lower()
 
-
+#计算两个文本的相似度
 def similarity_ratio(a, b):
 
     try:
@@ -300,7 +299,7 @@ def similarity_ratio(a, b):
             normalize_ws(b)
         ).ratio()
 
-
+#计算文本的token长度
 def token_len(tokenizer, text):
 
     return len(
@@ -310,7 +309,7 @@ def token_len(tokenizer, text):
         )
     )
 
-
+#去除代码块
 def strip_code_fences(text):
 
     text = clean_text(text)
@@ -368,7 +367,7 @@ def load_all_train_data():
 
     return samples
 
-
+#打乱数据集，确保每个config的数据都被打乱
 def make_seed_order(samples):
 
     rng = random.Random(SEED)
@@ -420,14 +419,14 @@ def make_seed_order(samples):
 # ============================================================
 # 11. GENERATOR PARSER
 # ============================================================
-
+#生成器解析器，用于解析生成器输出的问题
 GENERATION_PREFIXES = [
     r"^\s*problem\s*:\s*",
     r"^\s*new\s+problem\s*:\s*",
     r"^\s*problem\s+statement\s*:\s*",
 ]
 
-
+#元数据前缀模式，用于解析生成器输出的元数据
 META_PREFIX_PATTERNS = [
     r"^\s*the\s+new\s+problem\s+is\s*:?\s*",
     r"^\s*one\s+new\s+problem\s+is\s*:?\s*",
@@ -439,7 +438,7 @@ META_PREFIX_PATTERNS = [
     r"^\s*changed\s+(?:numbers|values|context)\s*:?\s*",
 ]
 
-
+#解决方案过渡模式，用于解析生成器输出的解决方案
 SOLUTION_TRANSITIONS = [
 
     r"\bto\s+solve\s+the\s+problem\b",
@@ -481,7 +480,7 @@ SOLUTION_TRANSITIONS = [
     r"\bso\s+the\s+answer\s+is\b",
 ]
 
-
+#解决方案正则表达式，用于匹配解决方案
 SOLUTION_RE = re.compile(
     "|".join(
         SOLUTION_TRANSITIONS
@@ -489,7 +488,7 @@ SOLUTION_RE = re.compile(
     flags=re.I
 )
 
-
+#代码或占位符模式，用于匹配生成器输出的代码或占位符
 CODE_OR_PLACEHOLDER_PATTERNS = [
 
     r"\[new\s+problem\]",
@@ -511,7 +510,7 @@ CODE_OR_PLACEHOLDER_PATTERNS = [
     r"<answer>",
 ]
 
-
+#元数据生成模式，用于匹配生成器输出的元数据
 META_GENERATION_PATTERNS = [
 
     r"\bgenerate\s+(?:a|one)\s+new\s+problem\b",
@@ -527,7 +526,7 @@ META_GENERATION_PATTERNS = [
     r"\bhere\s+is\s+(?:a|the)\s+new\s+problem\b",
 ]
 
-
+#提取最后一个boxed内容
 def extract_last_boxed(text):
 
     matches = re.findall(
@@ -543,7 +542,7 @@ def extract_last_boxed(text):
 
     return None
 
-
+#去除生成器前缀，包括问题描述和元数据
 def strip_generator_prefix(text):
 
     text = strip_code_fences(text)
@@ -720,7 +719,7 @@ def problem_contains_obvious_solution(text):
 
     return False
 
-
+#判断生成的问题是否明显是错误的
 def generated_problem_is_obviously_bad(text):
 
     norm = normalize_ws(text)
@@ -796,17 +795,17 @@ def parse_generator_output(
     seed_problem,
     tokenizer
 ):
-
+#清洗文本，去除特殊字符和换行符
     raw_output = clean_text(
         raw_output
     )
-
+#去除生成器前缀，包括问题描述和元数据
     parsed, action = (
         strip_generator_prefix(
             raw_output
         )
     )
-
+#去除解决方案污染，包括解决方案过渡和解决方案正则表达式
     parsed, action2 = (
         cut_solution_contamination(
             parsed
@@ -828,17 +827,17 @@ def parse_generator_output(
         action = (
             f"{action}+{action2}"
         )
-
+#去除代码块
     parsed = strip_code_fences(
         parsed
     ).strip()
-
+#判断生成的问题是否明显是错误的
     reason = (
         generated_problem_is_obviously_bad(
             parsed
         )
     )
-
+#如果生成的问题明显是错误的，则返回False
     if reason:
 
         return {
@@ -851,7 +850,7 @@ def parse_generator_output(
                 parsed
             ),
         }
-
+#判断生成的问题是否与种子问题相似
     if generated_problem_copies_seed(
         seed_problem,
         parsed
@@ -867,7 +866,7 @@ def parse_generator_output(
                 parsed
             ),
         }
-
+#判断生成的问题是否包含明显的解决方案
     if problem_contains_obvious_solution(
         parsed
     ):
@@ -882,12 +881,12 @@ def parse_generator_output(
                 parsed
             ),
         }
-
+#计算生成的问题与种子问题的相似度
     sim = similarity_ratio(
         seed_problem,
         parsed
     )
-
+#如果相似度大于阈值，则返回False
     if sim >= SIMILARITY_THRESHOLD:
 
         return {
@@ -897,12 +896,12 @@ def parse_generator_output(
             "reason": "seed_copy",
             "similarity": sim,
         }
-
+#计算生成的问题的token长度
     n_tokens = token_len(
         tokenizer,
         parsed
     )
-
+#如果token长度小于最小长度，则返回False
     if n_tokens < MIN_PROBLEM_TOKENS:
 
         return {
@@ -912,7 +911,7 @@ def parse_generator_output(
             "reason": "too_short",
             "similarity": sim,
         }
-
+#如果token长度大于最大长度，则返回False，因为token长度过长会导致模型无法处理
     if n_tokens > MAX_PROBLEM_TOKENS:
 
         return {
@@ -935,7 +934,7 @@ def parse_generator_output(
 # ============================================================
 # 12. SOLVER ANSWER EXTRACTION
 # ============================================================
-
+#清洗答案文本，去除特殊字符和换行符
 def normalize_answer_text(answer):
 
     if answer is None:
@@ -956,7 +955,7 @@ def normalize_answer_text(answer):
 
     return answer
 
-
+#提取解决方案，包括精确格式、截断答案块、最后一个boxed内容、显式答案行
 def extract_solver_answer(response):
 
     response = clean_text(
@@ -1052,7 +1051,7 @@ def extract_solver_answer(response):
         "missing"
     )
 
-
+#规范化答案文本，去除特殊字符和换行符
 def canonical_answer_for_agreement(
     answer
 ):
@@ -1086,7 +1085,7 @@ def canonical_answer_for_agreement(
 
     return norm
 
-
+#判断两个答案是否一致
 def answers_agree(a, b):
 
     a = normalize_answer_text(a)
@@ -1108,7 +1107,7 @@ def answers_agree(a, b):
 
         return True
 
-    # Try project grader if available.
+    # 尝试使用project grader判断两个答案是否一致
     try:
 
         from grader import grade_answer_mathd
@@ -1123,6 +1122,7 @@ def answers_agree(a, b):
     except Exception:
         pass
 
+    # 尝试使用drgrpo_grader判断两个答案是否一致
     try:
 
         from drgrpo_grader import (
@@ -1139,7 +1139,7 @@ def answers_agree(a, b):
     except Exception:
         pass
 
-    # SymPy fallback.
+    # 尝试使用SymPy判断两个答案是否一致
     try:
 
         import sympy as sp
@@ -1217,7 +1217,7 @@ def destroy_llm(llm):
 # ============================================================
 # 14. GENERATE NEW PROBLEMS
 # ============================================================
-
+#生成候选问题
 def generate_candidates(
     llm,
     tokenizer,

@@ -1630,19 +1630,19 @@ def main():
                 # -----------------------------------------------------
                 # Current policy log probability
                 # -----------------------------------------------------
-
+                #获取当前策略的log概率（每个位置下个token的概率分布）
                 token_logp = sequence_token_logprob(
                     model,
                     batch["input_ids"],
                     batch["attention_mask"],
                     batch["response_mask"],
                 )
-
+                #获取旧策略的log概率
                 batch_old_logps = [
                     x["old_logp"]
                     for x in examples[start:end]
                 ]
-
+                #将旧策略的log概率pad成一个tensor
                 old_token_logp = torch.nn.utils.rnn.pad_sequence(
                     batch_old_logps,
                     batch_first=True,
@@ -1651,7 +1651,7 @@ def main():
                     device,
                     non_blocking=True,
                 )
-
+                #将旧策略的log概率mask成一个tensor
                 old_logp_mask = torch.nn.utils.rnn.pad_sequence(
                     [
                         torch.ones_like(
@@ -1675,7 +1675,7 @@ def main():
                     token_logp
                     - old_token_logp
                 )
-
+                #将log概率clamp到[-20,20]之间
                 # Important numerical protection.
                 log_ratio = torch.clamp(
                     log_ratio,
@@ -1690,11 +1690,11 @@ def main():
                 # -----------------------------------------------------
                 # Advantage broadcast
                 # -----------------------------------------------------
-
+                #扩展优势维度便于广播到该回答的每一个token上
                 advantages = batch[
                     "advantages"
                 ].unsqueeze(-1)
-
+                #由于是下一个token的预测，所以需要整体右移对齐（第一个token的预测目标在第二个token）
                 response_mask = batch[
                     "response_mask"
                 ][:, 1:]
@@ -1703,7 +1703,7 @@ def main():
                     * old_logp_mask.to(
                         response_mask.dtype
                     )
-                )
+                )#有效token且为response
 
                 # -----------------------------------------------------
                 # GRPO / PPO clipped objective
